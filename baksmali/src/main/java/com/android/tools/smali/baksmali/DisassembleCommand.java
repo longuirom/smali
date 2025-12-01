@@ -30,6 +30,7 @@
 
 package com.android.tools.smali.baksmali;
 
+
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.Parameters;
@@ -37,6 +38,8 @@ import com.beust.jcommander.ParametersDelegate;
 import com.beust.jcommander.validators.PositiveInteger;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.android.tools.smali.dexlib2.dexbacked.DexBackedDexFile;
+import com.android.tools.smali.dexlib2.iface.MultiDexContainer;
 import com.android.tools.smali.dexlib2.util.SyntheticAccessorResolver;
 import com.android.tools.smali.util.ConsoleUtil;
 import com.android.tools.smali.util.StringWrapper;
@@ -165,6 +168,61 @@ public class DisassembleCommand extends DexInputCommand {
                     "Warning: You are disassembling an odex/oat file without deodexing it. You won't be able to " +
                             "re-assemble the results unless you deodex it. See \"baksmali help deodex\"",
                     ConsoleUtil.getConsoleWidth());
+        }
+
+        if (dexEntry != null && dexEntry.getContainer() instanceof MultiDexContainer) {
+            MultiDexContainer<? extends DexBackedDexFile> container = (MultiDexContainer<? extends DexBackedDexFile>) dexEntry.getContainer();
+            List<String> entryNames;
+            try {
+                entryNames = container.getDexEntryNames();
+            } catch (IOException e) {
+                System.err.println("Error reading container entries: " + e.getMessage());
+                System.exit(1);
+                return;
+            }
+
+            System.out.println("Found " + entryNames.size() + " DEX files. Disassembling all...");
+
+            for (String entryName : entryNames) {
+                MultiDexContainer.DexEntry<? extends DexBackedDexFile> entry;
+                try {
+                    entry = container.getEntry(entryName);
+                } catch (IOException e) {
+                    System.err.println("Failed to read " + entryName + ": " + e.getMessage());
+                    continue;
+                }
+                if (entry == null) continue;
+
+                String safeName = entryName.replace('/', '_').replace(':', '_');
+                File entryOutputDir = new File(outputDir, safeName);
+                if (!entryOutputDir.exists() && !entryOutputDir.mkdirs()) {
+                    System.err.println("Cannot create directory: " + entryOutputDir);
+                    System.exit(1);
+                }
+
+                System.out.println("  → " + entryName + " → " + entryOutputDir);
+
+                BaksmaliOptions entryOptions = getOptions();
+                if (accessorComments) {
+                    entryOptions.syntheticAccessorResolver = new SyntheticAccessorResolver(
+                            entry.getDexFile().getOpcodes(), entry.getDexFile().getClasses());
+                }
+                if (needsClassPath()) {
+                    try {
+                        entryOptions.classPath = analysisArguments.loadClassPathForDexFile(
+                                inputFile.getAbsoluteFile().getParentFile(), entry, shouldCheckPackagePrivateAccess());
+                    } catch (Exception ex) {
+                        System.err.println("Error loading class path for " + entryName);
+                        ex.printStackTrace(System.err);
+                        continue;
+                    }
+                }
+
+                if (!Baksmali.disassembleDexFile(entry.getDexFile(), entryOutputDir, jobs, entryOptions, classes)) {
+                    System.exit(1);
+                }
+            }
+            return;
         }
 
         File outputDirectoryFile = new File(outputDir);

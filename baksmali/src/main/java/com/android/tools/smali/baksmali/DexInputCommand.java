@@ -30,6 +30,9 @@
 
 package com.android.tools.smali.baksmali;
 
+import com.android.tools.smali.dexlib2.dexbacked.DexDexContainer;
+import com.android.tools.smali.dexlib2.dexbacked.raw.HeaderItem;
+import com.android.tools.smali.util.InputStreamUtil;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.google.common.base.Strings;
@@ -43,7 +46,9 @@ import com.android.tools.smali.util.jcommander.ExtendedParameter;
 
 import javax.annotation.Nonnull;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.List;
 
 /**
@@ -147,6 +152,32 @@ public abstract class DexInputCommand extends Command {
                 throw new RuntimeException(ex);
             }
         } else {
+                 if (file.getName().endsWith(".dex")) {
+                try {
+                    byte[] buf = InputStreamUtil.toByteArray(Files.newInputStream(file.toPath()));
+                    int dexVersion = HeaderItem.getVersion(buf, 0);
+                    if (dexVersion >= 41) {
+                        MultiDexContainer<? extends DexBackedDexFile> container = new DexDexContainer(file, opcodes);
+                        List<String> entryNames = container.getDexEntryNames();
+                        if (entryNames.isEmpty()) {
+                            throw new RuntimeException("\"" + input + "\" has no dex files");
+                        }
+                        if (entryNames.size() == 1) {
+                            dexEntry = container.getEntry(entryNames.get(0));
+                            assert dexEntry != null;
+                            dexFile = dexEntry.getDexFile();
+                        } else {
+                            dexEntry = container.getEntry(entryNames.get(0));
+                            assert dexEntry != null;
+                            dexFile = dexEntry.getDexFile();
+                        }
+                        return;
+                    }
+                } catch (IOException ex) {
+                    throw new RuntimeException(ex);
+                }
+            }
+
             try {
                 MultiDexContainer<? extends DexBackedDexFile> container =
                         DexFileFactory.loadDexContainer(file, opcodes);
