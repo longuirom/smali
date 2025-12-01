@@ -176,19 +176,16 @@ public class DisassembleCommand extends DexInputCommand {
             try {
                 entryNames = container.getDexEntryNames();
             } catch (IOException e) {
-                System.err.println("Error reading container entries: " + e.getMessage());
                 System.exit(1);
                 return;
             }
 
-            System.out.println("Found " + entryNames.size() + " DEX files. Disassembling all...");
 
             for (String entryName : entryNames) {
                 MultiDexContainer.DexEntry<? extends DexBackedDexFile> entry;
                 try {
                     entry = container.getEntry(entryName);
                 } catch (IOException e) {
-                    System.err.println("Failed to read " + entryName + ": " + e.getMessage());
                     continue;
                 }
                 if (entry == null) continue;
@@ -196,7 +193,6 @@ public class DisassembleCommand extends DexInputCommand {
                 String safeName = entryName.replace('/', '_').replace(':', '_');
                 File entryOutputDir = new File(outputDir, safeName);
                 if (!entryOutputDir.exists() && !entryOutputDir.mkdirs()) {
-                    System.err.println("Cannot create directory: " + entryOutputDir);
                     System.exit(1);
                 }
 
@@ -212,7 +208,6 @@ public class DisassembleCommand extends DexInputCommand {
                         entryOptions.classPath = analysisArguments.loadClassPathForDexFile(
                                 inputFile.getAbsoluteFile().getParentFile(), entry, shouldCheckPackagePrivateAccess());
                     } catch (Exception ex) {
-                        System.err.println("Error loading class path for " + entryName);
                         ex.printStackTrace(System.err);
                         continue;
                     }
